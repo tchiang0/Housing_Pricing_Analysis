@@ -1,0 +1,158 @@
+---
+title: "Mini_Project_3"
+author: "Diane Chiang"
+date: "2024-02-06"
+knit: (function(inputFile, encoding) {
+        Sys.setenv(RSTUDIO_PANDOC="/Applications/RStudio.app/Contents/Resources/app/quarto/bin/tools");
+        rmarkdown::render(inputFile,
+                          encoding=encoding, 
+                          output_file=file.path(dirname(inputFile), "housing_price_exploration.pdf")) })
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+house_data <- read.csv("https://www.dropbox.com/s/a31cli00d4k8xuv/kc_house_data1000.csv?dl=1")
+head(house_data)
+```
+
+## Part A
+### 1. Calculate pairwise correlations between price, bedrooms, bathrooms, sqft_living, and sqft_lot.
+```{r, message=FALSE}
+library(corrplot)
+library(tidyverse)
+sub_hd = house_data %>% select("price", "bedrooms", "bathrooms", "sqft_living", "sqft_lot")
+h = cor(sub_hd)
+corrplot(h, method='number')
+```
+The pairwise correlation is shown (the faint pinks are either 0.03 or -0.03).
+
+### 2. Make a scatterplot of the sale price versus the living area of the house. Describe the association between these two variables.
+```{r}
+plot(sub_hd$sqft_living, sub_hd$price, ylab="Sale Price", xlab="Living Area (sqft)", main = "Living Area (sqft) VS. Sale Price")
+```
+There seems to be a somewhat positive correlation between living area (in sqft) and sales price. The variance in sale price increases as living area increases as well. 
+
+### 3. Fit a simple linear regression model (Model 1) with sale price (price) as response variable and area of the house (sqft_living) as the predictor variable. State the estimated value of the intercept and the estimated coefficient for the area variable.
+```{r}
+mod_1 = lm(price ~ sqft_living, data=sub_hd)
+summary(mod_1)
+```
+The estimated intercept is around -5527.261 and the estimated coefficient for the living area in sqft (sqft_living) variable is approximately 260.812.
+
+### 4. Write the equation that describes the relationship between the mean sale price and living square footage.
+$\text{Mean Sale Price}} = -5527.261 + 260.812 * \text{sqft_living}$
+
+### 5. State the interpretation in words of the estimated intercept and slope in the context of this problem
+Intercept interpretation: If there is no living space (0 sqft), the sales prices is -5527.261, which doesn't make sense since it's an extrapolation from the data.\\
+Slope interpretation: On average, sale prices increases by about 260.812 with one square foot increase in living space. 
+
+## Part B
+### 1. Add the sqft_lot variable to the linear regression model (Model 2). How did the estimated coefficient for the sqft_living variable change?
+```{r}
+mod_2 = lm(price ~ sqft_living + sqft_lot, data=sub_hd)
+summary(mod_2)
+```
+The estimated coefficient of sqft_living changed from 260.812 to 272.008. 
+
+### 2. What is the interpretation of the estimated coefficient for sqft_living?
+Adjusting for sqft_lot, the estimated effect of sqft_living on mean sale price is 272.008.
+
+### 3. What is R2 value from Model 1 and 2. Why are they different?
+R2 value from Model 1 is approximately 41.78% and the R2 value from Model 2 is about 43.95%. The slight increase in R2 value suggests that with sqft_lot, the model explained the variation in the price slightly better. More specifically, for model 1, sqft_living explained 41.78% of the variation in price, whereas in model 2, sqft_living and sqft_lot explained 43.95% of the variation in price. 
+
+### 4. Report the estimates of the error variances from the two models. Why are they different?
+```{r}
+summary(mod_1)$sigma**2
+summary(mod_2)$sigma**2
+```
+The error variances from model 1 is larger than the error variances from model 2, which makes sense since the combination of sqrt_loft and sqrt_living explained the variation in price better, so the error variances in model 2 is lower than that of model 1. 
+
+### 5. What is the interpretation of the estimated error variance for Model 2?
+Estimated error variance provides an importance measure of the variability in a set of data that is not explained by the model, since it's the sum of squared value of the difference between observed response and predicted response for all points. The value therefore suggests that using model 2, the total squared difference between observed sale price and predicted sale price using sqft_living and sqft_lot is 53277056305.
+
+### 6. Test the null hypothesis that the coefficient of the sqft_living variable in Model 2 is equal to 0. (Assume that the assumptions required for the test are met.) Report the test statistic. What is the distribution of the test statistic under the null hypothesis? What is the p-value?
+```{r}
+mod_2_sum = summary(mod_2)
+mod_2_sum
+```
+The t score is approximately 27.941 with a p-value less than 2e-16. The distribution of the test statistic under the null hypothesis has an t distribution with 997 (1000 - 2 - 1) degrees of freedom. Since the t score is less than the significance level (0.05), we reject the null hypothesis and conclude that the coefficient of sqft_living in model 2 is not equal to 0. 
+
+### 7. Test the null hypothesis that the coefficients of both the sqft_living and sqft_lot variables are equal to 0. (Assume that the assumptions required for the test are met.) Report the test statistic. What is the distribution of the test statistic under the null hypothesis? What is the p-value?
+```{r}
+mod_2_sum
+```
+The test statistic is 390.9 and the distribution of the test statistic under the null hypothesis is the f-distribution with 2, 997 degrees of freedom. The p value is less than 2.2e-16, so we reject the null hypothesis and conclude that at least one of the coefficients of sqft_living and sqft_lot is not equal to 0. 
+
+## Part C
+### 1. Fit a linear regression model with price as the response variable and sqft_living, sqft_lot, bedrooms, and bathrooms as predictor variables. Calculate robust standard errors for the coefficient estimates. Display a table with estimated coefficients, the usual standard errors that assume constant variance, and robust standard errors.
+```{r, message=FALSE}
+library(sandwich)
+library(lmtest)
+```
+
+```{r}
+mod_c = lm(price ~ sqft_living + sqft_lot + bedrooms + bathrooms, data=sub_hd)
+mod_c_sum = summary(mod_c)
+mod_c_sum
+mod_c_sum_robust = coeftest(mod_c, vcov=vcovHC)
+mod_c_sum_robust
+```
+
+```{r, message=FALSE}
+library(data.table) 
+estimates = mod_c_sum$coefficients[,1]
+std_err = mod_c_sum$coefficients[,2]
+robust_std_error = c(mod_c_sum_robust[,2])
+
+df = data.frame(estimates, std_err, robust_std_error)
+df
+```
+
+### 2. Assess the constant variance assumption and briefly comment on what you find.
+```{r}
+par(mfrow=c(2,2))
+plot(mod_c)
+```
+Base on the residual vs. fitted plot, it's clear that the constant variance assumption is violated as variance increases as fitted values increases.
+
+### 3. Test that the coefficient of the bedrooms variable is equal to 0 using the usual standard errors that assume constant variance. Report the test statistic and p-value. Test that the coefficient of the bedrooms variable is equal to 0 using robust standard errors.
+```{r}
+mod_c_sum
+mod_c_sum_robust
+```
+Assuming constant variance, the test statistic is -2.084 and the p-value is approximately 0.0374. Using robust standard error, the test statistic is -1.8498 and the p-value is around 0.06464. Let 0.05 be our significance level, we would reject the null hypothesis if we assumed we have constant variance, whereas we would fail to reject the null hypothesis if we're using the robust standard error. 
+
+### 4. Use the jackknife to estimate the SE for the coefficient of the bedrooms variable. Report the jackknife estimate of the SE.
+```{r}
+n = nrow(sub_hd)
+bedrooms = rep(0, n)
+for(i in 1:n){
+  lmjack = lm(price ~ sqft_living + sqft_lot + bedrooms + bathrooms, data=sub_hd, subset=-i)
+  lmjack_sum = summary(lmjack)
+  bedrooms[i] = lmjack_sum$coefficients[4, 1]
+}
+
+hist(bedrooms)
+```
+
+```{r}
+varhat = ((n - 1)/n)*sum((bedrooms - mean(bedrooms))^2)
+sehat = sqrt(varhat)
+print(sehat)
+```
+
+
+### 5. Use the jackknife estimate of the SE to test the null hypothesis that the coefficient of the bedrooms variable is equal to 0. Report the test statistic and p-value.
+```{r}
+bed_hat = mod_c_sum$coefficients[4, 1] 
+t_score = bed_hat/sehat
+t_score
+2*pt(t_score, 995, lower.tail = TRUE)
+```
+The t scores is around -1.850727 and the p value is around 0.0645.
+
+### 6. Comment on the results from questions 3 and 5 of this part.
+The jackknife result agrees with the result using robust standard errors. Both method yield p values (0.0645 and 0.06464, respectively), larger than the significance level (assumed to be 0.05), so we fail to reject that the coefficient of the bedrooms variable is equal to 0. However, if we assumed constant variance, we get a p value, 0.0374, that is smaller than the significance level, leading us to reject the null hypothesis and conclude that the coefficient of the bedrooms variable is not 0. Since the constant variance assumption is violated (checked in C2), we will go with the result from jackknife and using robust standard error.
